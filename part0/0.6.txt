@@ -1,0 +1,16 @@
+title spa
+
+borwser->server: HTTP GET https://studies.cs.helsinki.fi/exampleapp/spa
+server-->borwser: HTML code
+borwser->server: HTTP GET https://studies.cs.helsinki.fi/exampleapp/main.css
+server-->borwser: main.css
+borwser->server: HTTP GET https://studies.cs.helsinki.fi/exampleapp/spa.js
+server-->borwser: spa.js
+
+note over borwser
+browser starts executing spa.js
+than requests the data.json from server
+end note 
+
+borwser->server: HTTP GET https://studies.cs.helsinki.fi/exampleapp/data.json
+server-->borwser: data.json
