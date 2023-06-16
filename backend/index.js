@@ -9,7 +9,7 @@ const unknownEndpoint = (request, response) => {
     })
 }
 
-
+app.use(express.static('build'))
 app.use(cors())
 app.use(express.json())
 morgan.token('req-body', (req, res) => JSON.stringify(req.body))
