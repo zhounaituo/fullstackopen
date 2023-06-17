@@ -3,53 +3,49 @@ const morgan = require('morgan')
 const cors = require('cors')
 const app = express()
 
+const Person = require('./models/node')
+
 const unknownEndpoint = (request, response) => {
     response.status(404).send({
         error: "unknown endpoint"
     })
 }
 
-app.use(express.static('build'))
-app.use(cors())
-app.use(express.json())
-morgan.token('req-body', (req, res) => JSON.stringify(req.body))
-app.use(morgan(':method :url :status :res[content-length] - :response-time ms :req-body'))
+const errorHandler = (error, request, response, next) => {
+    console.log(error)
 
-let persons = 
-[
-    { 
-      "id": 1,
-      "name": "Arto Hellas", 
-      "number": "040-123456"
-    },
-    { 
-      "id": 2,
-      "name": "Ada Lovelace", 
-      "number": "39-44-5323523"
-    },
-    { 
-      "id": 3,
-      "name": "Dan Abramov", 
-      "number": "12-43-234345"
-    },
-    { 
-      "id": 4,
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
+    if(error.name === 'CastError'){
+        return response.status(400).send({ error: 'malformatted id.'})
     }
-]
+
+    next(error)
+}
+
+morgan.token('req-body', req => JSON.stringify(req.body))
+
+app.use(cors())
+app.use(express.static('build'))
+app.use(express.json())
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms :req-body'))
 
 // 请求所有对象
 app.get('/api/persons',(request, response) => {
-    return response.json(persons)
+    Person.find({}).then(result => {
+        response.json(result)
+    })
 })
 
 // 请求单个对象
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-
-    return person ? response.json(person) : response.status(404).send()
+app.get('/api/persons/:id', (request, response, next) => {
+    Person.findById(request.params.id)
+        .then(person => {
+            if(person){
+                response.json(person)
+            } else {
+                response.status(404).send({ error: `${request.params.id} is not fund.`})
+            }
+        })
+        .catch(error => next(error))
 })
 
 // 其他请求
@@ -66,41 +62,24 @@ app.get('/info', (request, response) => {
 })
 
 // 删除一个对象
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-    persons = persons.filter(person => person.id != id)
-
-    return response.status(204).send()
+app.delete('/api/persons/:id', (request, response, next) => {
+    Person.findByIdAndDelete(request.params.id)
+        .then(result => {
+            if(result){
+                response.status(200).send(result)
+            } else {
+                response.status(404).send({ error: `${request.params.id} is not fund.`})
+            }
+        })
+        .catch(error => next(error))
 })
 
-const generated = () => {
-    const getNumber = () =>{
-        const number = Math.floor(Math.random() * 10)
-        return persons.map(person => person.id).find(v => v === number)
-            ? getNumber()
-            : number
-    }
-    const maxId = persons.length > 0
-        ? getNumber()
-        : 0
-    
-    return maxId + 1;
-}
-
 // 添加一个对象
-app.post('/api/persons', (request, response) => {
+app.post('/api/persons', (request, response, next) => {
     const body = request.body
     const person = {
-        id: generated(),
         name: body.name,
         number: body.number
-    }
-
-    if(!!persons.find(person => person.name === body.name)){
-        return response.status(404).send({
-            error: "The name already exists in the phonebook."
-        })
     }
 
     if(!body.name || !body.number){
@@ -109,13 +88,31 @@ app.post('/api/persons', (request, response) => {
         })
     }
 
-    persons = persons.concat(person)
-    return response.send({
-        sucess: `Added ${body.name}`
-    })
+    Person.find({ name: person.name})
+        .then(result => {
+            if(result.length > 0){
+                Person.findByIdAndUpdate(result[0]._id.toString(), person, {new: true})
+                    .then(result => {
+                        return response.send({
+                            sucess: `Updated ${result}`
+                        })
+                    })
+            } else {
+                Person.insertMany(person)
+                    .then(result => {
+                        return response.send({
+                            sucess: `Added ${result[0].name}`
+                        })
+                    })
+            }
+        })
+        .catch(error => next(error))
+
+
 })
 
 app.use(unknownEndpoint)
+app.use(errorHandler)
 
 app.listen(process.env.PORT || 3001, () => {
     console.log(`Server is running on http://localhost:3001/`)
